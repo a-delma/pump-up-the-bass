@@ -33,22 +33,22 @@ def main():
 
 def random_split(data, G):
     # data = T.RandomNodeSplit(num_val=0.2, num_test=0.1)(data)
-    # G.train_mask = data.train_mask
-    # G.val_mask = data.val_mask
-    # G.test_mask = data.test_mask
+    G.y = data.y
+    G.train_mask = data.train_mask[:, 0]
+    G.val_mask = data.val_mask[:, 0]
+    G.test_mask = data.test_mask
     return G
 
 def erdos_dataset(p=0):
 
     def erdos_transform(data: Data) -> Data:
-        # print(data.x.size(), data.y.size())
-        G : nx.DiGraph = to_networkx(data, node_attrs=['x', 'y'])
+        # print(data.train_mask.size(), data.test_mask.size())
+        G : nx.DiGraph = to_networkx(data, node_attrs=['x'])
         G_random = nx.generators.random_graphs.fast_gnp_random_graph(len(G), p)
         G.add_edges_from(G_random.edges())
-        # plot_degree_dist(G)
 
         G : Data = from_networkx(G, ['x'])
-        G.y = data.y
+        G = random_split(data, G)
         return G
     
     transform = T.Compose([
@@ -56,7 +56,7 @@ def erdos_dataset(p=0):
         T.ToDevice('cuda'),
         # T.RandomLinkSplit(num_val=0.2, num_test=0.1,is_undirected=True,
         #               split_labels=True, add_negative_train_samples=False),
-        T.RandomNodeSplit(num_val=0.2, num_test=0.1),
+        # T.RandomNodeSplit(num_val=0.2, num_test=0.1),
     ])
 
     train_data = DS.WikiCS('./data/', transform=transform, is_undirected=False)
