@@ -23,9 +23,8 @@ class SpectralEmbedding:
         node_emb : torch.Tensor = torch.tensor(self.dsd)
         # node_emb.to("cuda")
         # concatenate node embeddings with node features
-        node_emb = torch.cat((node_emb.to('cuda'), self.d.x), 1)
+        node_emb = torch.cat([node_emb.to('cuda'), self.d.x.to('cuda')], -1)
         return node_emb.type(torch.FloatTensor)
-  
 
 def compute_dsd_embedding(A, t = -1, gamma = 1, is_normalized = True):
     """
@@ -113,6 +112,7 @@ def compute_dsd_reduced_embedding(A, dims = 50):
 if __name__ == "__main__":
     from dataset import erdos_dataset
     ed = erdos_dataset()
-    spec_emb = SpectralEmbedding(ed[0][0]).get_embeddings()
+    spec = SpectralEmbedding(ed[0])
+    spec_emb = spec.get_embeddings()
     print("hello")
-    print(spec_emb)
+    print(spec_emb.size())

@@ -7,7 +7,7 @@ import torch
 import networkx as nx
 import math
 import scipy.stats as stats
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
 def plot_degree_dist(G):
@@ -47,7 +47,7 @@ def erdos_dataset(p=0):
         G.add_edges_from(G_random.edges())
         # plot_degree_dist(G)
 
-        G : Data = from_networkx(G, all)
+        G : Data = from_networkx(G, ['x'])
         G.y = data.y
         return G
     
