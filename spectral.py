@@ -4,20 +4,27 @@ from numpy import linalg as LA
 from torch_geometric.data import Data
 from torch_geometric.utils import from_networkx, to_networkx
 import networkx as nx
-
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 class SpectralEmbedding:
-        def __init__(self, d: Data):
-                self.G = to_networkx(d)
-                self.d = d
-                self.A = nx.adjacency_matrix(self.G).todense()
-                self.dsd = compute_dsd_embedding(self.A)
-        def get_embeddings():
-                node_emb = torch.tensor(self.dsd)
-                # concatenate node embeddings with node features
-                node_emb = torch.cat((node_emb, self.d.x), 1)
-                return node_emb
-                
+    def __init__(self, d: Data):
+        self.G = to_networkx(d)
+        self.d = d
+        self.A = nx.adjacency_matrix(self.G).todense()
+        
+    def get_embeddings(self):
+        try:
+            self.dsd = torch.load('dse_600.pt')
+        except:
+            self.dsd = compute_dsd_reduced_embedding(self.A, dims=self.d.num_node_features)
+            torch.save(self.dsd, 'dse_600.pt')
+            
+        node_emb : torch.Tensor = torch.tensor(self.dsd)
+        # node_emb.to("cuda")
+        # concatenate node embeddings with node features
+        node_emb = torch.cat((node_emb.to('cuda'), self.d.x), 1)
+        return node_emb.type(torch.FloatTensor)
   
 
 def compute_dsd_embedding(A, t = -1, gamma = 1, is_normalized = True):
@@ -35,15 +42,20 @@ def compute_dsd_embedding(A, t = -1, gamma = 1, is_normalized = True):
         A n x n output embedding. NOTE: since the dimension of X is n x n, when n is large, it is more space-efficient to use the reduced dimension representation of
         x, using the function `compute_dsd_reduced_embedding` function for `gamma` == 1
     """
+    
     n, _ = A.shape
     e    = np.ones((n, 1))
+    A = np.array(A)
+    indeces = np.diag_indices(n)[0]
+    indeces = indeces[A.diagonal() == 0]
+    A[indeces, indeces] = 1
     
     # compute the degree vector and the Transition matrix `P`
     d = A @ e
     P = A/d
-
+    t_ = np.multiply(e, d).T 
     # Compute scaling `W`, which is a rank one matrix used for removing the component from P with eigenvalue 1
-    W     = (1 / np.sum(d)) * np.dot(e, (e * d).T)
+    W     = (1 / np.sum(d)) * np.dot(e, t_)
 
     # This resulting `P'` has all eigenvalues less than 1
     P1 = gamma * (P - W)
@@ -63,8 +75,44 @@ def compute_dsd_embedding(A, t = -1, gamma = 1, is_normalized = True):
 
         return X
 
+
+def compute_dsd_reduced_embedding(A, dims = 50):
+    """
+    Performs the dimension reduction on the normalized DSD embedding, returning a
+    reduced dimension matrix.
+    
+    parameters:
+        A: A n x n numpy matrix representing the adjacency matrix 
+        dims(d): The reduced dimension 
+        
+    output:
+        A n x d dimensional embedding of the network.
+    """
+    
+    n, _  = A.shape
+    A = np.array(A)
+    indeces = np.diag_indices(n)[0]
+    indeces = indeces[A.diagonal() == 0]
+    A[indeces, indeces] = 1
+    # Get the normalized adjacency matrix N = D^{-1/2} A D^{-1/2}, L = I - N
+    d1_2 = np.sqrt(A @ np.ones((n, 1)))
+    N    = (A / d1_2) / d1_2.T       
+    L    = np.eye(n, n) - N
+    
+    # Get the eigendecomposition of the laplacian
+    lvals, X_ls  = LA.eig(L + np.eye(n, n))
+    
+    # Get the smallest `dims` eigencomponents
+    l_ids = np.argsort(lvals)[1 : dims + 1]
+    l_r   = lvals[l_ids] - 1
+    
+    X_lr  = X_ls[:, l_ids] / d1_2
+    
+    return np.real(X_lr) * np.real(l_r).reshape(1, -1)
         
 if __name__ == "__main__":
     from dataset import erdos_dataset
-    ed,_,_ = erdos_dataset()
-    spec_emb = SpectralEmbedding(ed[0]).get_embeddings()
+    ed = erdos_dataset()
+    spec_emb = SpectralEmbedding(ed[0][0]).get_embeddings()
+    print("hello")
+    print(spec_emb)
