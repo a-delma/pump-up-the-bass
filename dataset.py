@@ -44,19 +44,21 @@ def erdos_dataset(p=0):
     def erdos_transform(data: Data) -> Data:
         # print(data.train_mask.size(), data.test_mask.size())
         G : nx.DiGraph = to_networkx(data, node_attrs=['x'])
+        original_edges = len(G.edges())
         G_random = nx.generators.random_graphs.fast_gnp_random_graph(len(G), p)
         G.add_edges_from(G_random.edges())
+        added_edges = len(G.edges()) - original_edges
 
         G : Data = from_networkx(G, ['x'])
-        G = random_split(data, G)
+        # G = random_split(data, G)
+        G.edges_added = added_edges
+        G.y = data.y
         return G
     
     transform = T.Compose([
         erdos_transform,
         T.ToDevice('cuda'),
-        # T.RandomLinkSplit(num_val=0.2, num_test=0.1,is_undirected=True,
-        #               split_labels=True, add_negative_train_samples=False),
-        # T.RandomNodeSplit(num_val=0.2, num_test=0.1),
+        T.RandomNodeSplit(num_val=0.2, num_test=0.1),
     ])
 
     train_data = DS.WikiCS('./data/', transform=transform, is_undirected=False)
@@ -65,23 +67,32 @@ def erdos_dataset(p=0):
 
 def powerlaw_dataset(p=0):
 
-    def erdos_transform(data: Data) -> Data:
-        G = to_networkx(data)
-        # plot_degree_dist(G)
+    def powerlaw_transform(data: Data) -> Data:
+        G = to_networkx(data, node_attrs=['x'])
         f = math.factorial
         n = len(G)
         num_edges = int(f(n) // f(2) // f(n-2) * p)
-        print(num_edges, n)
         sum_degrees = sum(list(map(lambda x: x[1], G.degree())))
         ps = [G.degree(x) / sum_degrees for x in G]
         custm = stats.rv_discrete(name='custm', values=(range(0,n), ps))
         edges = [(src, tar) for src, tar in zip(custm.rvs(size=num_edges), custm.rvs(size=num_edges)) if src != tar]
-        G.add_edges_from(edges)
-        # plot_degree_dist(G)
-        
-        return random_split(data, from_networkx(G))
 
-    train_data = DS.WikiCS('./data/', transform=erdos_transform, is_undirected=False)
+        original_edges = len(G.edges())
+        G.add_edges_from(edges)
+        added_edges = len(G.edges()) - original_edges
+
+        G = from_networkx(G)
+        G.y = data.y
+        G.edges_added = added_edges
+        return G
+
+    transform = T.Compose([
+        powerlaw_transform,
+        T.ToDevice('cuda'),
+        T.RandomNodeSplit(num_val=0.2, num_test=0.1),
+    ])
+
+    train_data = DS.WikiCS('./data/', transform=transform, is_undirected=False)
 
     return train_data   
 

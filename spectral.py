@@ -13,12 +13,15 @@ class SpectralEmbedding:
         self.d = d
         self.A = nx.adjacency_matrix(self.G).todense()
         
-    def get_embeddings(self):
-        try:
-            self.dsd = torch.load('dse_600.pt')
-        except:
+    def get_embeddings(self, fromfile = False):
+        if fromfile:
+            try:
+                self.dsd = torch.load('dse_600.pt')
+            except:
+                self.dsd = compute_dsd_reduced_embedding(self.A, dims=self.d.num_node_features)
+                torch.save(self.dsd, 'dse_600.pt')
+        else:
             self.dsd = compute_dsd_reduced_embedding(self.A, dims=self.d.num_node_features)
-            torch.save(self.dsd, 'dse_600.pt')
             
         node_emb : torch.Tensor = torch.tensor(self.dsd)
         # node_emb.to("cuda")

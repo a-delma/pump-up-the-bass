@@ -26,26 +26,32 @@ class simpleClassifer(torch.nn.Module):
         # print(x)
         return x
 
-def train_model(model, data, y_true, epoch=50):
+def train_model(model, data, y_true, epoch=250, edge_index = None, x = None, mask=None):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     model.train()
     y_true = y_true.to('cuda')
     loss_fn = torch.nn.CrossEntropyLoss()
     for e in range(epoch):
         optimizer.zero_grad()
-        z = model(data)
+        if edge_index is not None:
+            z = model(x, edge_index)[mask]
+        else:
+            z = model(data)
         loss = loss_fn(z.squeeze(), y_true)
         loss.backward()
         optimizer.step()
-        if e % 5 == 0:
+        if e % 10 == 0:
             print(f'Epoch: {e} Loss: {loss}')
 
-def test_model(model, data, y_true):
+def test_model(model, data, y_true, edge_index=None,x=None, mask=None):
     model.eval()
     y_true = y_true.to('cuda')
     criteon = MulticlassAUPRC(num_classes=10)
     with torch.no_grad():
-        z = model(data)
+        if edge_index is not None:
+            z = model(x, edge_index)[mask]
+        else:
+            z = model(data)
         criteon.update(z, y_true)
         auprc = criteon.compute()
         print(f"Precision: {auprc}, Size: {y_true.size()}")
